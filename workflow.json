@@ -1,0 +1,553 @@
+{
+  "name": "n8n + GitHub",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 * * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -448,
+        -32
+      ],
+      "id": "425c2e6d-75ec-48f6-9496-f5d985596ccd",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/mozes22/n8n-challenge/issues?state=open&since={{$json.since}}\n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "GITHUB_PAT"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-workflow"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        -32
+      ],
+      "id": "0944c92e-3002-458b-99fd-1095663c9438",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=From the following GitHub issue body:\n\n1. Generate a concise one-sentence summary.  \n2. Categorize it as a type of issue (e.g., \"Bug\", \"Feature Request\", \"Question\").  \n3. Assign it to a role:  \n   - Engineering → for bugs and technical feature requests  \n   - Sales → for pricing, demos, or business use  \n   - Support → for how-to questions or user guidance  \n4. Classify the sentiment of the issue body as \"Positive\", \"Neutral\", or \"Negative\".  \n5. Generate 2–5 short lowercase tags that describe the issue (e.g., [\"ui\", \"api\", \"critical\"]).  \n\nRespond ONLY as JSON with the following keys:  \nsummary, category, assigned_role, sentiment, tags.  \n\nIssue body:  \n{{$json[\"body\"]}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        592,
+        -256
+      ],
+      "id": "5ba5d15f-9256-4ef6-815a-0bdd9c8ade47",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "T29vUSE9GQvwjfMk",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const issue = $json;\nconsole.log($json)\n\nlet raw = issue.message?.content || \"\";\nraw = raw.replace(/```json|```/g, \"\").trim();\n\nlet parsed = {};\ntry {\n  parsed = JSON.parse(raw);\n} catch {\n  parsed = {\n    summary: raw,\n    category: \"Uncategorized\",\n    assigned_role: \"Engineering\"\n  };\n}\n\nreturn {\n  json: {\n    title: issue.title,\n    creator_login: issue.user?.login,\n    issue_url: issue.html_url,\n    summary: parsed.summary,\n    category: parsed.category,\n    assigned_role: parsed.assigned_role,\n    sentiment: parsed.sentiment,\n    tags: parsed.tags ? `{${parsed.tags.join(\",\")}}` : \"{}\"\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        -64
+      ],
+      "id": "3f5e5213-2bc1-4d4b-9c51-55471d80b6dc",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "jsCode": "const workflowStaticData = $getWorkflowStaticData('global');\n\nlet since = workflowStaticData.lastRun || new Date(Date.now() - 365*24*60*60*1000).toISOString().split('.')[0] + 'Z';\n\nworkflowStaticData.lastRun = new Date().toISOString().split('.')[0] + 'Z';\n\nreturn [{ json: { since, lastRun: workflowStaticData.lastRun } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        -32
+      ],
+      "id": "0335094e-26ca-40a1-b73e-47f01a9fed0b",
+      "name": "Data and Date"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1136,
+        -64
+      ],
+      "id": "7250922c-11e6-4bd0-a18e-4b98f57af4e1",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.assigned_role }}",
+                    "rightValue": "Engineering",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "abfa848c-6032-4103-87f6-a771e2722975"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "434ae9f0-3f36-4b70-939b-d8e4f124bcae",
+                    "leftValue": "={{ $json.assigned_role }}",
+                    "rightValue": "Sales",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "616bf620-81a1-49d0-be46-1628cba28d12",
+                    "leftValue": "{{ $json.assigned_role }}",
+                    "rightValue": "Support",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1872,
+        -80
+      ],
+      "id": "f69a608e-7ad5-41f4-8842-159e74a62008",
+      "name": "Switch",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C09AWAA89AT",
+          "mode": "list",
+          "cachedResultName": "engineering"
+        },
+        "text": "=🚨 New GitHub Issue for Engineering\n*Title:* {{$json[\"title\"]}}\n*Summary:* {{$json[\"summary\"]}}\n*Category:* {{$json[\"category\"]}}\n*Sentiment:* {{$json[\"sentiment\"]}}\n<{{$json[\"issue_url\"]}}|View Issue>",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        2352,
+        -288
+      ],
+      "id": "991c6e33-4d01-42d8-a29e-fd579eb05ad6",
+      "name": "Send a message to Engineering",
+      "webhookId": "9bf5d164-3d95-431f-86bf-111962d9738f",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "olNZvxkYhh025LNj",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C09B36PRW1H",
+          "mode": "list",
+          "cachedResultName": "sales"
+        },
+        "text": "=🚨 New GitHub Issue for Sales\n*Title:* {{$json[\"title\"]}}\n*Summary:* {{$json[\"summary\"]}}\n*Category:* {{$json[\"category\"]}}\n*Sentiment:* {{$json[\"sentiment\"]}}\n<{{$json[\"issue_url\"]}}|View Issue>",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        2352,
+        -64
+      ],
+      "id": "6fcd63ce-0fd4-4f8d-975e-aec2f252ed72",
+      "name": "Send a message to Sales",
+      "webhookId": "fcc979d4-7a2a-4970-a8a7-0ea6d7eece07",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "olNZvxkYhh025LNj",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C09BMCNDDED",
+          "mode": "list",
+          "cachedResultName": "support"
+        },
+        "text": "=🚨 New GitHub Issue for Support\n*Title:* {{$json[\"title\"]}}\n*Summary:* {{$json[\"summary\"]}}\n*Category:* {{$json[\"category\"]}}\n*Sentiment:* {{$json[\"sentiment\"]}}\n<{{$json[\"issue_url\"]}}|View Issue>",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        2352,
+        144
+      ],
+      "id": "ebd7d55f-8c70-42b0-9a2a-11d6503d3438",
+      "name": "Send a message to Support",
+      "webhookId": "4c23925c-4216-44d9-871f-af58eafe8bc6",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "olNZvxkYhh025LNj",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "enriched_issues",
+        "dataToSend": "autoMapInputData"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1648,
+        -384
+      ],
+      "id": "9adc2334-cb14-417b-bacc-301132956e98",
+      "name": "Create a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "IG5HkMdyasaKTKsw",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://yytmivxfhunsbdfxlbnw.supabase.co/rest/v1/enriched_issues ",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "SUPABASE_API_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer SUPABASE_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"{{$json.title}}\",\n  \"creator_login\": \"{{$json.creator_login}}\",\n  \"category\": \"{{$json.category}}\",\n  \"summary\": \"{{$json.summary}}\",\n  \"assigned_role\": \"{{$json.assigned_role}}\",\n  \"sentiment\": \"{{$json.sentiment}}\",\n  \"tags\": \"{{$json.tags}}\",\n  \"issue_url\": \"{{$json.issue_url}}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1632,
+        192
+      ],
+      "id": "0e5b9fc6-072a-4ac0-a7e9-376fe7addb0a",
+      "name": "HTTP Request Supabase",
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0fd3852b-f35b-48ea-b6a5-5bff7ca9b81c",
+              "leftValue": "={{$json[\"id\"]}}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "58e53760-d4e3-4749-9522-ad63e6017e99",
+              "leftValue": "={{$json[\"title\"]}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {
+          "ignoreCase": false
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        416,
+        -32
+      ],
+      "id": "1de6eebe-3102-489f-9004-1ba1cd1e7c18",
+      "name": "If"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Data and Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request Supabase",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data and Date": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Send a message to Engineering",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message to Sales",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message to Support",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message to Engineering": {
+      "main": [
+        []
+      ]
+    },
+    "Create a row": {
+      "main": [
+        []
+      ]
+    },
+    "HTTP Request Supabase": {
+      "main": [
+        []
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "57838faf-f541-4046-a96d-6deecaf17ed1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "db1d1d4b56a312081c7e37229b7f50cafa62ced311d3a0385af7f4c46cf19704"
+  },
+  "id": "gAA6az77sI0Oxwvt",
+  "tags": []
+}
